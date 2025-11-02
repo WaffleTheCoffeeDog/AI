@@ -33,6 +33,15 @@ var rotationVelocity = 0;
 var tick = 0;
 var maxRotVel = 10;
 var gameSpeed = 1;
+var shootCooldown = 0;
+var objects = {};
+objects.bullets = [];
+objects.enemies = [];
+
+var maxSpawnDistance =
+  (canvas.width > canvas.height
+    ? canvas.width/2 - 100
+    : canvas.height/2 - 100)
 
 function drawFrame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -55,11 +64,93 @@ function drawFrame() {
     canvas.height / 2 + Math.cos(toRad(rotation)) * 100
   );
   ctx.fill();
+
+  objects.bullets.forEach((bullet) => {
+    ctx.beginPath();
+    ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "yellow";
+    ctx.fill();
+  });
+
+  objects.enemies.forEach((enemy) => {
+    ctx.beginPath();
+    ctx.arc(
+      canvas.width / 2 + Math.sin(toRad(enemy.angle)) * enemy.distance,
+      canvas.height / 2 + Math.cos(toRad(enemy.angle)) * enemy.distance,
+      30,
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = "red";
+    ctx.fill();
+  }); 
 }
 
 function logic() {
   rotation += rotationVelocity;
+
+  objects.bullets.forEach((bullet, index) => {
+    bullet.x += Math.sin(toRad(bullet.angle)) * 10;
+    bullet.y += Math.cos(toRad(bullet.angle)) * 10;
+    if (
+      bullet.x < 0 ||
+      bullet.x > canvas.width ||
+      bullet.y < 0 ||
+      bullet.y > canvas.height
+    ) {
+      objects.bullets.splice(objects.bullets.indexOf(bullet), 1);
+      console.log("Bullet" + index + "removed");
+    }
+  });
+
+  objects.enemies.forEach((enemy, index) => {
+    enemy.distance -= 2;
+    console.log("Enemy" + index + "distance: " + enemy.distance);
+    if (enemy.distance < 100) {
+      console.log(
+        "Enemy" +
+          index +
+          "killed player, literal noob over here smh what a loser I can't believe you let that happen that's so embarrassing"
+      );
+      objects.enemies.splice(objects.enemies.indexOf(enemy), 1);
+    }
+  })}
+
+  function shoot() {
+    objects.bullets.push({
+      angle: rotation,
+      x: canvas.width / 2 + Math.sin(toRad(rotation)) * 50,
+      y: canvas.height / 2 + Math.cos(toRad(rotation)) * 50,
+    });
+  }
+
+  function newEnemy() {
+    objects.enemies.push({
+      angle: Math.random() * 360,
+      distance: maxSpawnDistance,
+    });
+  }
+
+
+//Game loop
+async function gameLoop() {
+  tick++;
+  logic();
+  drawFrame();
+  console.log("Tick: " + tick);
+  rotationVelocity = 1 * maxRotVel;
+  console.log("Rotation: ", simplifyAngle(rotation));
+
+  if (gameSpeed >= 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 / gameSpeed));
+    requestAnimationFrame(gameLoop);
+  } else {
+    requestAnimationFrame(gameLoop);
+  }
 }
+requestAnimationFrame(gameLoop);
+
+// ===========================================================================================================
 
 //AI init
 var neurons = [];
@@ -152,16 +243,15 @@ function run(...input) {
   return neurons[neurons.length - 1][0].value;
 }
 
-function train(am, trainingSet) {
+function train(am) {
   mutationRange *= mutationDecay;
   for (let i = 0; i < am; i++) {
     neurray[i] = randomize(mutationRange, bestNetwork);
     neurons = neurray[i];
     let totalError = 0;
-    for (let sample of trainingSet) {
-      let output = run(...sample.input);
-      totalError += Math.abs(output - sample.target);
-    }
+    /* for (let sample of trainingSet) {
+      totalError += Math.abs(run(...sample.input) - sample.target);
+    } */
     if (totalError < bestScore) {
       bestScore = totalError;
       bestNetwork = JSON.parse(JSON.stringify(neurray[i]));
@@ -172,19 +262,4 @@ function train(am, trainingSet) {
 
 newNeur(0.7, 2, 3, 2, 2);
 
-//Game loop
-async function gameLoop() {
-  tick++;
-  logic();
-  drawFrame();
-  console.log("Tick: " + tick);
-  rotationVelocity = 1 * maxRotVel;
-  console.log("Rotation: ", simplifyAngle(rotation));
-
-  if(gameSpeed >= 1) {
-await new Promise(resolve => setTimeout(resolve, 1000 / gameSpeed))
-  requestAnimationFrame(gameLoop);
-} else {
-    requestAnimationFrame(gameLoop);
-}}
-requestAnimationFrame(gameLoop);
+console.log("ai script loaded");
