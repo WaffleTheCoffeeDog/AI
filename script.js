@@ -28,20 +28,22 @@ simplifyAngle = (angle) => {
 };
 
 //Game init
-var rotation = 0;
+var rotation = Math.random() * 360;
 var rotationVelocity = 0;
 var tick = 0;
 var maxRotVel = 10;
-var gameSpeed = 1;
+var gameSpeed = 0;
 var shootCooldown = 0;
 var objects = {};
 objects.bullets = [];
 objects.enemies = [];
+var kills = 0;
+var cycleStart = 0;
 
 var maxSpawnDistance =
-  (canvas.width > canvas.height
-    ? canvas.width/2 - 100
-    : canvas.height/2 - 100)
+  canvas.width > canvas.height
+    ? canvas.width / 2 - 100
+    : canvas.height / 2 - 100;
 
 function drawFrame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -58,10 +60,6 @@ function drawFrame() {
     20,
     0,
     Math.PI * 2
-  );
-  console.log(
-    canvas.width / 2 + Math.sin(toRad(rotation)) * 100,
-    canvas.height / 2 + Math.cos(toRad(rotation)) * 100
   );
   ctx.fill();
 
@@ -83,7 +81,7 @@ function drawFrame() {
     );
     ctx.fillStyle = "red";
     ctx.fill();
-  }); 
+  });
 }
 
 function logic() {
@@ -99,49 +97,87 @@ function logic() {
       bullet.y > canvas.height
     ) {
       objects.bullets.splice(objects.bullets.indexOf(bullet), 1);
-      console.log("Bullet" + index + "removed");
     }
+
+    objects.enemies.forEach((enemy, eIndex) => {
+      let enemyX =
+        canvas.width / 2 + Math.sin(toRad(enemy.angle)) * enemy.distance;
+      let enemyY =
+        canvas.height / 2 + Math.cos(toRad(enemy.angle)) * enemy.distance;
+      let dist = Math.hypot(bullet.x - enemyX, bullet.y - enemyY);
+      if (dist < 60) {
+        objects.enemies.splice(objects.enemies.indexOf(enemy), 1);
+        objects.bullets.splice(objects.bullets.indexOf(bullet), 1);
+        kills++;
+      }
+    });
   });
 
   objects.enemies.forEach((enemy, index) => {
     enemy.distance -= 2;
-    console.log("Enemy" + index + "distance: " + enemy.distance);
+    enemy.x = canvas.width / 2 + Math.sin(toRad(enemy.angle)) * enemy.distance;
+    enemy.y = canvas.height / 2 + Math.cos(toRad(enemy.angle)) * enemy.distance;
     if (enemy.distance < 100) {
-      console.log(
-        "Enemy" +
-          index +
-          "killed player, literal noob over here smh what a loser I can't believe you let that happen that's so embarrassing"
-      );
       objects.enemies.splice(objects.enemies.indexOf(enemy), 1);
+      if (kills > bestScore) {
+        bestScore = kills;
+        bestNetwork = JSON.parse(JSON.stringify(neurons));
+      }
     }
-  })}
+  });
+}
 
-  function shoot() {
-    objects.bullets.push({
-      angle: rotation,
-      x: canvas.width / 2 + Math.sin(toRad(rotation)) * 50,
-      y: canvas.height / 2 + Math.cos(toRad(rotation)) * 50,
-    });
+function shoot() {
+  objects.bullets.push({
+    angle: rotation,
+    x: canvas.width / 2 + Math.sin(toRad(rotation)) * 50,
+    y: canvas.height / 2 + Math.cos(toRad(rotation)) * 50,
+  });
+}
+
+function newEnemy() {
+  objects.enemies.push({
+    angle: Math.random() * 360,
+    distance: maxSpawnDistance,
+  });
+}
+
+function updateAngleDifferenceAverage() {
+  if (objects.enemies.length > 0) {
+    var angleDiff = Math.abs(simplifyAngle(rotation) - simplifyAngle(objects.enemies[0].angle));
+      if (!this.angleDiffSum) this.angleDiffSum = 0;
+      if (!this.angleDiffCount) this.angleDiffCount = 0;
+      this.angleDiffSum += angleDiff;
+      this.angleDiffCount++;
+  return this.angleDiffSum / this.angleDiffCount;
   }
-
-  function newEnemy() {
-    objects.enemies.push({
-      angle: Math.random() * 360,
-      distance: maxSpawnDistance,
-    });
-  }
-
+}
 
 //Game loop
+
 async function gameLoop() {
   tick++;
   logic();
   drawFrame();
-  console.log("Tick: " + tick);
-  rotationVelocity = 1 * maxRotVel;
-  console.log("Rotation: ", simplifyAngle(rotation));
 
-  if (gameSpeed >= 1) {
+if (!currentlyTraining) {
+  newTrainingCycle();
+  
+}
+
+if (objects.enemies.length > 0) {
+  rotationVelocity = run(simplifyAngle(rotation), simplifyAngle(objects.enemies[0].angle))[1] * maxRotVel;
+  run(simplifyAngle(rotation), simplifyAngle(objects.enemies[0].angle))[0] > 0.2 ? shoot() : null;
+}
+
+score = (1 / updateAngleDifferenceAverage()) + kills
+console.log("Score: " + score)
+
+if (Math.random() * 100 < 1) {
+  newEnemy();
+}
+
+if (gameSpeed >= 1) {
     await new Promise((resolve) => setTimeout(resolve, 1000 / gameSpeed));
     requestAnimationFrame(gameLoop);
   } else {
@@ -160,7 +196,8 @@ var bestNetwork = [];
 var bestScore = Infinity;
 var mutationRange = 0.7;
 var mutationDecay = 0.99;
-const loggedErrors = new Set();
+var loggedErrors = new Set();
+var currentlyTraining = false;
 
 function activate(x) {
   return Math.tanh(x);
@@ -186,7 +223,7 @@ function run(...input) {
       );
     }
   }
-  return neurons[neurons.length - 1][0].value;
+  return [neurons[neurons.length - 1][0].value , neurons[neurons.length - 1][1].value];
 }
 
 function newNeur(range, ...neuronAmount) {
@@ -224,42 +261,37 @@ function randomize(range, nArray) {
   return clone;
 }
 
-function run(...input) {
-  for (let i = 0; i < neurons[0].length; i++) {
-    neurons[0][i].value = activate(input[i] + neurons[0][i].weight);
-  }
-  for (let i = 1; i < neurons.length; i++) {
-    for (let i1 = 0; i1 < neurons[i].length; i1++) {
-      neurons[i][i1].value = 0;
-      for (let i2 = 0; i2 < neurons[i - 1].length; i2++) {
-        neurons[i][i1].value +=
-          neurons[i - 1][i2].value * neurons[i - 1][i2].bias[i1];
-      }
-      neurons[i][i1].value = activate(
-        neurons[i][i1].value + neurons[i][i1].weight
-      );
-    }
-  }
-  return neurons[neurons.length - 1][0].value;
-}
-
 function train(am) {
   mutationRange *= mutationDecay;
   for (let i = 0; i < am; i++) {
     neurray[i] = randomize(mutationRange, bestNetwork);
     neurons = neurray[i];
-    let totalError = 0;
-    /* for (let sample of trainingSet) {
+  }
+}
+
+function evaluate() {
+      /*let totalError = 0;
+     for (let sample of trainingSet) {
       totalError += Math.abs(run(...sample.input) - sample.target);
-    } */
+    } 
     if (totalError < bestScore) {
       bestScore = totalError;
       bestNetwork = JSON.parse(JSON.stringify(neurray[i]));
-    }
-  }
-  neurons = bestNetwork;
+    }*/}
+
+function newTrainingCycle() {
+score = 0;
+  kills = 0;
+  objects.enemies = [];
+  objects.bullets = [];
+  neurons = JSON.parse(JSON.stringify(bestNetwork));
+  currentlyTraining = true;
+  rotation = Math.random() * 360;
+  rotationVelocity = 0;
+  cycleStart = tick;
 }
 
-newNeur(0.7, 2, 3, 2, 2);
 
-console.log("ai script loaded");
+newNeur(1.5, 2, 3, 2, 2);
+
+train(20);

@@ -11,3 +11,4 @@ If it ends up working some, some simple ways to make it cooler are:
     - giving it access to more than one enemy at a time
     - more complex movement for enemies
     - punishing it for shooting too much, making it conserve ammo.
+    - adding traits to enemies (like speed, so it has to manage the faster ones sooner than the slow ones)

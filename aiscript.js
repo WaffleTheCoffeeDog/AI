@@ -109,6 +109,5 @@ for (let i = 0; i < 5000; i++) {
     loggedErrors.add(roundedError);
   }
 }
-
 console.log("Final best network:", bestNetwork);
 console.log("Final best score:", bestScore);
